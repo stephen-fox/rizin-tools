@@ -60,7 +60,7 @@ func mainWithError() error {
 	rizinExePath := flag.String(
 		rizinExePathArg,
 		"rizin",
-		"The rizin executable to use")
+		"The rizin executable `path` to use")
 
 	help := flag.Bool(
 		helpArg,
@@ -75,37 +75,37 @@ func mainWithError() error {
 	exePath := flag.String(
 		filePathArg,
 		"",
-		"Executable path to examine")
+		"File `path` to examine")
 
 	arch := flag.String(
 		archArg,
 		"",
-		"Executable architecture")
+		"Target platform `architecture`")
 
 	bits := flag.String(
 		bitsArg,
 		"",
-		"Executable bits")
+		"Target platform `bits`")
 
 	childSym := flag.String(
 		childSymArg,
 		"",
-		"Child symbol name")
+		"Child `symbol` name")
 
 	parentSym := flag.String(
 		parentSymArg,
 		"",
-		"Parent symbol name")
+		"Parent `symbol` name")
 
 	maxDepth := flag.Uint(
 		maxDepthArg,
 		0,
-		"Only include path if it is less than n calls deep (0 means no limit)")
+		"Only include paths less than n calls deep (0 means no limit)")
 
 	outputFormat := flag.String(
 		outputFormatArg,
 		prettyFormatName,
-		"Output format ('"+prettyFormatName+"', '"+oneLineFormatName+"')")
+		"Output `format` ('"+prettyFormatName+"', '"+oneLineFormatName+"')")
 
 	flag.Parse()
 

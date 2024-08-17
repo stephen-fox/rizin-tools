@@ -1,0 +1,4 @@
+github.com/stephen-fox/radareutil v0.0.2 h1:QsCwHzd75DsCX60KQrwah6BE+XMdl1LrAZrH1lIuvLM=
+github.com/stephen-fox/radareutil v0.0.2/go.mod h1:2i2MzdGmIEOUzDzAoBgmGfeUT6ztqXK0M1RRdfrefes=
+golang.org/x/sys v0.24.0 h1:Twjiwq9dn6R1fQcyiK+wQyHWfaz/BJB+YIpzU/Cv3Xg=
+golang.org/x/sys v0.24.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=

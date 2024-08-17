@@ -13,3 +13,5 @@ tool's README for further information.
 - [library-exports][library-exports] - Generates a list of a library's
   exported symbols and their signatures. Useful for developing a proxy
   library
+- [rz-paths](rz-paths) - rz-paths finds code paths between a child symbol
+  and parent symbol using rizin

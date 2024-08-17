@@ -1,6 +1,6 @@
 # rz-paths
 
-rz-paths finds code paths between a child symbold and parent symbol
+rz-paths finds code paths between a child symbol and a parent symbol
 using rizin.
 
 ## Usage

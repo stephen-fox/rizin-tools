@@ -1,4 +1,4 @@
-// rz-paths finds code paths between a child symbold and parent symbol
+// rz-paths finds code paths between a child symbol and a parent symbol
 // using rizin.
 package main
 
@@ -26,7 +26,7 @@ SYNOPSIS
   ` + appName + ` -` + filePathArg + ` file-path -` + childSymArg + ` child-symbol -` + parentSymArg + ` parent-symbol
 
 DESCRIPTION
-  ` + appName + ` finds code paths between a child and parent symbol
+  ` + appName + ` finds code paths between a child symbol and a parent symbol
   using rizin.
 
 OPTIONS

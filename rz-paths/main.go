@@ -105,8 +105,8 @@ func mainWithError() error {
 
 	maxRefs := flag.Uint(
 		maxRefsArg,
-		0,
-		"Only parse n refs per node (0 means no limit)")
+		100,
+		"Stop if a node has more than n refs (0 means no limit)")
 
 	outputFormat := flag.String(
 		outputFormatArg,
@@ -385,7 +385,8 @@ func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 	}
 
 	if o.MaxRefs > 0 && len(refs) > int(o.MaxRefs) {
-		refs = refs[0:o.MaxRefs]
+		return fmt.Errorf("%s (0x%x) has %d references which exceeds the configured maximum of %d",
+			id, addr, len(refs), o.MaxRefs)
 	}
 
 	for _, r := range refs {

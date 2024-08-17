@@ -20,4 +20,4 @@ cmd="$(rz-bin -Ej "${library_file}" \
   echo "${cmd}"
 })"
 
-rizin -AA -c "${cmd}" -Q "${library_file}"
+rizin -AA -c "${cmd}" -q "${library_file}"

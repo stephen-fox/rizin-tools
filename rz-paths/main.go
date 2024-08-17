@@ -42,6 +42,7 @@ OPTIONS
 	childSymArg     = "c"
 	parentSymArg    = "p"
 	maxDepthArg     = "d"
+	maxRefsArg      = "r"
 
 	prettyFormatName  = "pretty"
 	oneLineFormatName = "one-line"
@@ -101,6 +102,11 @@ func mainWithError() error {
 		maxDepthArg,
 		0,
 		"Only include paths less than n calls deep (0 means no limit)")
+
+	maxRefs := flag.Uint(
+		maxRefsArg,
+		0,
+		"Only parse n refs per node (0 means no limit)")
 
 	outputFormat := flag.String(
 		outputFormatArg,
@@ -190,6 +196,7 @@ func mainWithError() error {
 		Parent:   *parentSym,
 		Child:    *childSym,
 		MaxDepth: uint(*maxDepth),
+		MaxRefs:  uint(*maxRefs),
 		Api:      rizinApi,
 		OnPathFn: func(p *CodePath) error {
 			paths = append(paths, p)
@@ -231,6 +238,7 @@ type PathFinder struct {
 	Parent   string
 	Child    string
 	MaxDepth uint
+	MaxRefs  uint
 	OnPathFn func(*CodePath) error
 	Api      radareutil.Api
 	current  *CodePath
@@ -374,6 +382,10 @@ func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse axt refs to %q - %w",
 			id, err)
+	}
+
+	if o.MaxRefs > 0 && len(refs) > int(o.MaxRefs) {
+		refs = refs[0:o.MaxRefs]
 	}
 
 	for _, r := range refs {

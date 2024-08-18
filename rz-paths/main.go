@@ -115,7 +115,7 @@ func mainWithError() error {
 	flag.Var(
 		&intermediateSymbols,
 		interSymArg,
-		"Optionally require the presence of a symbol between parent and child\n"+
+		"Optionally require the presence of a `symbol` between parent and child\n"+
 			"(may be specified more than once)")
 
 	maxDepth := flag.Uint(

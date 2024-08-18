@@ -43,6 +43,7 @@ OPTIONS
 	bitsArg         = "b"
 	childSymArg     = "c"
 	parentSymArg    = "p"
+	interSymArg     = "i"
 	maxDepthArg     = "d"
 	maxRefsArg      = "r"
 
@@ -110,6 +111,13 @@ func mainWithError() error {
 		"",
 		"Parent `symbol` name")
 
+	var intermediateSymbols stringMapArg
+	flag.Var(
+		&intermediateSymbols,
+		interSymArg,
+		"Optionally require the presence of a symbol between parent and child\n"+
+			"(may be specified more than once)")
+
 	maxDepth := flag.Uint(
 		maxDepthArg,
 		0,
@@ -140,7 +148,8 @@ func mainWithError() error {
 			return
 		}
 
-		if f.Name == archArg || f.Name == bitsArg {
+		switch f.Name {
+		case archArg, bitsArg, interSymArg:
 			return
 		}
 
@@ -209,6 +218,7 @@ func mainWithError() error {
 	finder := PathFinder{
 		Parent:   *parentSym,
 		Child:    *childSym,
+		Inters:   intermediateSymbols.values,
 		MaxDepth: uint(*maxDepth),
 		MaxRefs:  uint(*maxRefs),
 		Unique:   *onlyUniquePaths,
@@ -254,11 +264,42 @@ func mainWithError() error {
 	return nil
 }
 
+type stringMapArg struct {
+	values map[string]struct{}
+}
+
+func (o *stringMapArg) String() string {
+	if len(o.values) == 0 {
+		return ""
+	}
+
+	strs := make([]string, len(o.values))
+
+	i := 0
+	for s := range o.values {
+		strs[i] = s
+		i++
+	}
+
+	return strings.Join(strs, ", ")
+}
+
+func (o *stringMapArg) Set(s string) error {
+	if o.values == nil {
+		o.values = make(map[string]struct{})
+	}
+
+	o.values[s] = struct{}{}
+
+	return nil
+}
+
 var stopLookingErr = errors.New("stop looking")
 
 type PathFinder struct {
 	Parent   string
 	Child    string
+	Inters   map[string]struct{}
 	MaxDepth uint
 	MaxRefs  uint
 	Unique   bool
@@ -386,6 +427,14 @@ func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 			}
 
 			o.visited[str] = struct{}{}
+		}
+
+		if len(o.Inters) > 0 {
+			for intermediateSym := range o.Inters {
+				if !o.current.nextContains(intermediateSym) {
+					return nil
+				}
+			}
 		}
 
 		current := o.current.clone()

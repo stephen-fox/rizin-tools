@@ -125,7 +125,7 @@ func mainWithError() error {
 
 	maxRefs := flag.Uint(
 		maxRefsArg,
-		1000,
+		0,
 		"Skip node if it has more than n refs (0 means no limit)")
 
 	outputFormat := flag.String(

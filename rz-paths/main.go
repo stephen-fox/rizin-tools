@@ -337,7 +337,7 @@ func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 	}
 
 	if o.current != nil {
-		if o.MaxDepth > 0 && o.current.Depth > int(o.MaxDepth) {
+		if o.MaxDepth > 0 && o.current.Depth+1 > int(o.MaxDepth) {
 			return nil
 		}
 

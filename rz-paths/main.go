@@ -634,18 +634,29 @@ func parseAxtRefs(out string) ([]ref, error) {
 }
 
 func parseAxtLine(line string) (ref, bool, error) {
+	// We are not using the JSON output because rizin currently
+	// does not include the symbol name :(
+
 	if line == "" || strings.HasPrefix(line, "(nofunc)") || strings.Contains(line, " invalid") {
 		return ref{}, false, nil
 	}
 
+	// Examples:
+	// sym._syslog_DARWIN_EXTSN 0x185bcea9c [CALL] bl sym.__vsyslog
+	// sym.func.100007408; switch table (4 cases) at 0x1000077b8 0x1000075c0 [CODE] br x16
 	fields := strings.Fields(line)
 
 	addrStr := fields[1]
 
 	addr, err := parseHexAddr(addrStr)
 	if err != nil {
-		return ref{}, false, fmt.Errorf("failed to parse address %q - %w",
-			addrStr, err)
+		// TODO: Some axt references are not truly
+		// space-delimited. For now, just forgo
+		// including the address if we cannot parse
+		// the string.
+		//
+		//return ref{}, false, fmt.Errorf("failed to parse address %q - %w",
+		//	addrStr, err)
 	}
 
 	return ref{

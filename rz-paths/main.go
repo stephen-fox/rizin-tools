@@ -302,20 +302,24 @@ func (o *PathFinder) Lookup() error {
 
 	out, err := o.Api.Execute("s " + o.Child)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to seek to %q - %w",
+			o.Child, err)
 	}
 
 	if out != "" {
-		return fmt.Errorf("failed to seek to %q - %s", o.Child, out)
+		return fmt.Errorf("failed to seek to %q - rizin error: %s",
+			o.Child, out)
 	}
 
 	out, err = o.Api.Execute("s")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get address of %q - %w",
+			o.Child, err)
 	}
 
 	if out == "" {
-		return fmt.Errorf("failed to get address of %q - %s", o.Child, out)
+		return fmt.Errorf("failed to get address of %q - rizin error: %s",
+			o.Child, out)
 	}
 
 	addr, err := parseHexAddr(out)
@@ -375,16 +379,18 @@ func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 
 	out, err := o.Api.Execute("s " + id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to seek to %q - %w", id, err)
 	}
 
 	if out != "" {
-		return fmt.Errorf("failed to seek to %q - %s", id, out)
+		return fmt.Errorf("failed to seek to %q - rizin error: %s",
+			id, out)
 	}
 
 	out, err = o.Api.Execute("axt")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get references to %q - %w",
+			id, err)
 	}
 
 	if out == "" {

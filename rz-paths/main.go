@@ -198,9 +198,9 @@ func mainWithError() error {
 		}
 	}
 
-	out, err = rizinApi.Execute("aaa")
+	_, err = rizinApi.Execute("aaa")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute analysis commands - %w", err)
 	}
 
 	var paths []*CodePath

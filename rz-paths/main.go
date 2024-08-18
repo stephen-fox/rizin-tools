@@ -34,6 +34,7 @@ OPTIONS
 
 	rizinExePathArg = "R"
 	outputFormatArg = "F"
+	onlyNPathsArg   = "N"
 	helpArg         = "h"
 	debugLogArg     = "v"
 	filePathArg     = "f"
@@ -62,6 +63,11 @@ func mainWithError() error {
 		rizinExePathArg,
 		"rizin",
 		"The rizin executable `path` to use")
+
+	onlyNPaths := flag.Uint(
+		onlyNPathsArg,
+		0,
+		"Stop after finding n paths (0 means no limit)")
 
 	help := flag.Bool(
 		helpArg,
@@ -200,6 +206,11 @@ func mainWithError() error {
 		Api:      rizinApi,
 		OnPathFn: func(p *CodePath) error {
 			paths = append(paths, p)
+
+			if *onlyNPaths > 0 && len(paths) == int(*onlyNPaths) {
+				return stopLookingErr
+			}
+
 			return nil
 		},
 	}
@@ -212,7 +223,7 @@ func mainWithError() error {
 	}
 
 	err = finder.Lookup()
-	if err != nil {
+	if err != nil && !errors.Is(err, stopLookingErr) {
 		return err
 	}
 
@@ -233,6 +244,8 @@ func mainWithError() error {
 
 	return nil
 }
+
+var stopLookingErr = errors.New("stop looking")
 
 type PathFinder struct {
 	Parent   string

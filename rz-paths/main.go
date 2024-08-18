@@ -185,6 +185,8 @@ func mainWithError() error {
 		return fmt.Errorf("open failed - %s", out)
 	}
 
+	// TODO: rizin crashes if we try specifying "-q -0" with
+	// additional arguments like: "-a X -b Y -AA ./some-file"
 	if *arch != "" {
 		out, err = rizinApi.Execute("oa " + *arch + " " + *bits)
 		if err != nil {

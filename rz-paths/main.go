@@ -35,6 +35,7 @@ OPTIONS
 	rizinExePathArg = "R"
 	outputFormatArg = "F"
 	onlyNPathsArg   = "N"
+	uniquePathsArg  = "U"
 	helpArg         = "h"
 	debugLogArg     = "v"
 	filePathArg     = "f"
@@ -68,6 +69,11 @@ func mainWithError() error {
 		onlyNPathsArg,
 		0,
 		"Stop after finding n paths (0 means no limit)")
+
+	onlyUniquePaths := flag.Bool(
+		uniquePathsArg,
+		false,
+		"Only include paths with unique symbols")
 
 	help := flag.Bool(
 		helpArg,
@@ -203,6 +209,7 @@ func mainWithError() error {
 		Child:    *childSym,
 		MaxDepth: uint(*maxDepth),
 		MaxRefs:  uint(*maxRefs),
+		Unique:   *onlyUniquePaths,
 		Api:      rizinApi,
 		OnPathFn: func(p *CodePath) error {
 			paths = append(paths, p)
@@ -252,8 +259,10 @@ type PathFinder struct {
 	Child    string
 	MaxDepth uint
 	MaxRefs  uint
+	Unique   bool
 	OnPathFn func(*CodePath) error
 	Api      radareutil.Api
+	visited  map[string]struct{}
 	current  *CodePath
 	debug    *log.Logger
 }
@@ -298,6 +307,10 @@ func (o *PathFinder) Lookup() error {
 
 	if o.OnPathFn == nil {
 		return errors.New("please provide a path function")
+	}
+
+	if o.Unique {
+		o.visited = make(map[string]struct{})
 	}
 
 	out, err := o.Api.Execute("s " + o.Child)
@@ -360,6 +373,17 @@ func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 		if o.debug != nil {
 			o.debug.Printf("found path: on %q | depth: %d",
 				o.current.Sym, o.current.Depth)
+		}
+
+		if o.visited != nil {
+			str := o.current.uniqueSymCallString()
+
+			_, alreadySeen := o.visited[str]
+			if alreadySeen {
+				return nil
+			}
+
+			o.visited[str] = struct{}{}
 		}
 
 		current := o.current.clone()
@@ -461,6 +485,16 @@ func (o *CodePath) PrettyCallString() string {
 
 func (o *CodePath) String() string {
 	return fmt.Sprintf("%s (0x%x)", o.Sym, o.Addr)
+}
+
+func (o *CodePath) uniqueSymCallString() string {
+	current := o.Sym + "\x00"
+
+	if o.Next == nil {
+		return current
+	}
+
+	return current + o.Next.uniqueSymCallString()
 }
 
 func (o *CodePath) setIndex(i int) {

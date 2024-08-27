@@ -388,8 +388,13 @@ func (o *PathFinder) Lookup() error {
 
 func (o *PathFinder) lookupRecurse(id string, addr uintptr) error {
 	if o.debug != nil {
-		o.debug.Printf("lookup %q (current: %q)",
-			id, o.current.Sym)
+		if o.current == nil {
+			o.debug.Printf("lookup %q (iniital lookup)",
+				id)
+		} else {
+			o.debug.Printf("lookup %q (current: %q)",
+				id, o.current.Sym)
+		}
 	}
 
 	if o.current != nil {

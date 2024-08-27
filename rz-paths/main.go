@@ -162,18 +162,21 @@ func mainWithError() error {
 		return err
 	}
 
-	if *arch != "" && *bits == "" {
-		return fmt.Errorf("bits argument ('-%s') must be specified when using -%s",
-			bitsArg, archArg)
+	var extraRizinArgs []string
+
+	if *arch != "" {
+		extraRizinArgs = append(extraRizinArgs, "-a", *arch)
 	}
 
-	if *bits != "" && *arch == "" {
-		return fmt.Errorf("arch argument ('-%s') must be specified when using -%s",
-			archArg, bitsArg)
+	if *bits != "" {
+		extraRizinArgs = append(extraRizinArgs, "-b", *bits)
 	}
+
+	extraRizinArgs = append(extraRizinArgs, *exePath)
 
 	rizinApi, err := radareutil.NewCliApi(&radareutil.Radare2Config{
-		ExecutablePath: *rizinExePath,
+		AdditionalCliArgs: extraRizinArgs,
+		ExecutablePath:    *rizinExePath,
 	})
 	if err != nil {
 		return err
@@ -185,28 +188,9 @@ func mainWithError() error {
 	}
 	defer rizinApi.Kill()
 
-	out, err := rizinApi.Execute("o " + *exePath)
-	if err != nil {
-		return err
-	}
-
-	if out != "" {
-		return fmt.Errorf("open failed - %s", out)
-	}
-
-	// TODO: rizin crashes if we try specifying "-q -0" with
-	// additional arguments like: "-a X -b Y -AA ./some-file"
-	if *arch != "" {
-		out, err = rizinApi.Execute("oa " + *arch + " " + *bits)
-		if err != nil {
-			return err
-		}
-
-		if out != "" {
-			return fmt.Errorf("set arch and bits failed - %s", out)
-		}
-	}
-
+	// TODO: rizin crashes if we try specifying "-q -0" in
+	// addition to "-A", so we need to execute the analysis
+	// command after startup.
 	_, err = rizinApi.Execute("aaa")
 	if err != nil {
 		return fmt.Errorf("failed to execute analysis commands - %w", err)

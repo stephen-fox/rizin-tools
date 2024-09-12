@@ -1,7 +1,8 @@
 # library-exports
 
-Generates a list of a library's exported symbols. This is potentially useful
-for generating a proxy library.
+library-exports.sh creates a list of function signatures for a library's
+exported symbols using rizin. The script's output can be used to stub out
+a proxy library.
 
 ## Usage
 
@@ -13,7 +14,7 @@ library-exports.sh /path/to/library
 
 ```console
 $ library-exports.sh foo.dll                   
-void sym.foo.dll_Example1(int32_t arg_4h, int32_t arg_10h, int32_t arg_ch, int32_t arg_8h);
-void sym.foo.dll_Example2(int32_t arg_4h, int32_t arg_814h);
-void sym.foo.dll_Example3(int32_t arg_4h);
+void Example1(int32_t arg_4h, int32_t arg_10h, int32_t arg_ch, int32_t arg_8h);
+void Example2(int32_t arg_4h, int32_t arg_814h);
+void Example3(int32_t arg_4h);
 ```

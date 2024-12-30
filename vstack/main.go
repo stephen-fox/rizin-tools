@@ -207,9 +207,8 @@ func printStackVars(stackVars []stackVar, stackSize uint64) error {
 	// Add new line after table header
 	statTable += "\n"
 
+	index := 0
 	for i, stackVar := range stackVars {
-		index := i
-
 		// Handle the special case where the first stack variable does not start at 0x0
 		if i == 0 && stackVar.addrStart != 0x0 {
 			statTable += fmt.Sprintf(
@@ -238,6 +237,8 @@ func printStackVars(stackVars []stackVar, stackSize uint64) error {
 			columnWidth[6], stackVar.kind,
 			columnWidth[7], stackVar.name,
 		)
+
+		index++
 
 		// Add row for saved rbp
 		if i == len(stackVars)-1 {

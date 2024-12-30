@@ -15,5 +15,5 @@ tool's README for further information.
   library
 - [rz-paths](rz-paths) - rz-paths finds code paths between a child symbol
   and a parent symbol using rizin
-- [vstack](vstack) - Vstack visualizes the stack variables of a function
+- [vstack](vstack) - vstack visualizes the stack variables of a function
   based on rizin's afi output, supporting only 64-bit programs.

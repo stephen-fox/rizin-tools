@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -22,9 +23,9 @@ type stackVar struct {
 }
 
 type stackInfo struct {
-	offset    uint64
-	stackSize uint64
+	size      uint64
 	stackVars []stackVar
+	rsp       uint64
 }
 
 var (
@@ -41,7 +42,19 @@ func main() {
 }
 
 func mainWithError() error {
-	stackInfo, err := afi2StackInfo(bufio.NewScanner(os.Stdin))
+	rspStr := flag.String(
+		"rsp",
+		"0x00",
+		"Address of rsp register at the start of the function.")
+
+	flag.Parse()
+
+	rsp, err := strconv.ParseUint(strings.TrimPrefix(*rspStr, "0x"), 16, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse rsp to uint - %s", err)
+	}
+
+	stackInfo, err := afi2StackInfo(bufio.NewScanner(os.Stdin), rsp)
 	if err != nil {
 		return fmt.Errorf("failed to parse afi vars - %w", err)
 	}
@@ -54,7 +67,7 @@ func mainWithError() error {
 	return nil
 }
 
-func afi2StackInfo(scanner *bufio.Scanner) (stackInfo, error) {
+func afi2StackInfo(scanner *bufio.Scanner, rsp uint64) (stackInfo, error) {
 	var stack stackInfo
 
 	for scanner.Scan() {
@@ -62,20 +75,19 @@ func afi2StackInfo(scanner *bufio.Scanner) (stackInfo, error) {
 		words := strings.Fields(afiLine)
 
 		switch words[0] {
-		case "offset:":
-			offset, err := strconv.ParseUint(strings.Trim(words[1], "0x"), 16, 64)
-			if err != nil {
-				return stackInfo{}, fmt.Errorf("failed to parse stackframe - %s", err)
-			}
-
-			stack.offset = offset
 		case "stackframe:":
 			stackSize, err := strconv.ParseUint(words[1], 10, 64)
 			if err != nil {
-				return stackInfo{}, fmt.Errorf("failed to parse stackframe - %s", err)
+				return stackInfo{}, fmt.Errorf("failed to parse stackframe to uint - %s", err)
 			}
 
-			stack.stackSize = stackSize
+			stack.size = stackSize
+
+			if rsp == 0 {
+				stack.rsp = stackSize
+			} else {
+				stack.rsp = rsp
+			}
 		case "var":
 			sVar, err := parseVarLine(afiLine)
 			if err != nil {
@@ -83,15 +95,15 @@ func afi2StackInfo(scanner *bufio.Scanner) (stackInfo, error) {
 			}
 
 			numStackVars := len(stack.stackVars)
-			sVar.addrStart = stack.stackSize - sVar.varOffset
+			sVar.addrStart = stack.rsp - sVar.varOffset
 			if numStackVars > 0 {
 				lastSVar := &stack.stackVars[numStackVars-1]
 				lastSVar.addrEnd = sVar.addrStart - 0x1
 				lastSVar.size = lastSVar.addrEnd - lastSVar.addrStart + 0x1
 
-				leftSection := strings.Repeat("-", int(lastSVar.addrStart/0x4))
+				leftSection := strings.Repeat("-", int((stack.size-(stack.rsp-lastSVar.addrStart))/0x4))
 				midSection := strings.Repeat("x", int(lastSVar.size/0x4))
-				sectionSize := int(stack.stackSize / 0x4)
+				sectionSize := int(stack.size / 0x4)
 				rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection))
 
 				lastSVar.rangeString = leftSection + midSection + rightSection
@@ -109,12 +121,12 @@ func afi2StackInfo(scanner *bufio.Scanner) (stackInfo, error) {
 
 	// for the last stack var
 	lastSVar := &stack.stackVars[len(stack.stackVars)-1]
-	lastSVar.addrEnd = stack.stackSize - 0x9
+	lastSVar.addrEnd = stack.rsp - 0x9
 	lastSVar.size = lastSVar.addrEnd - lastSVar.addrStart + 0x1
 
-	leftSection := strings.Repeat("-", int(lastSVar.addrStart/0x4))
+	leftSection := strings.Repeat("-", int((stack.size-(stack.rsp-lastSVar.addrStart))/0x4))
 	midSection := strings.Repeat("x", int(lastSVar.size/0x4))
-	sectionSize := int(stack.stackSize / 0x4)
+	sectionSize := int(stack.size / 0x4)
 	rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection))
 
 	lastSVar.rangeString = leftSection + midSection + rightSection
@@ -146,7 +158,6 @@ func parseVarLine(line string) (stackVar, error) {
 }
 
 func printStackVars(stack stackInfo) error {
-	var hexPad int
 	//                      0       1         2        3        4      5       6       7
 	tableHeader := []string{"var#", "offset", "start", "range", "end", "size", "type", "name"}
 	columnWidth := make([]int, len(tableHeader))
@@ -154,12 +165,10 @@ func printStackVars(stack stackInfo) error {
 		columnWidth[i] = len(tableHeader[i])
 	}
 
+	hexPadStr := strconv.Itoa(len(fmt.Sprintf("%x", stack.stackVars[0].addrStart)))
+
 	// change column width based on table data size
 	for _, stackVar := range stack.stackVars {
-		hexLen := len(fmt.Sprintf("%x", stackVar.varOffset))
-		if hexPad < hexLen {
-			hexPad = hexLen
-		}
 
 		indexLen := utf8.RuneCountInString(strconv.Itoa(len(stack.stackVars)))
 		if columnWidth[0] < indexLen {
@@ -171,9 +180,9 @@ func printStackVars(stack stackInfo) error {
 			columnWidth[1] = offsetLen
 		}
 
-		addrStartLen := len(fmt.Sprintf("0x%x", stackVar.addrStart))
-		if columnWidth[1] < addrStartLen {
-			columnWidth[1] = addrStartLen
+		addrStartLen := len(fmt.Sprintf("0x%0"+hexPadStr+"x", stackVar.addrStart))
+		if columnWidth[2] < addrStartLen {
+			columnWidth[2] = addrStartLen
 		}
 
 		rangeStringLen := len(stackVar.rangeString)
@@ -202,8 +211,6 @@ func printStackVars(stack stackInfo) error {
 		}
 	}
 
-	hexPadStr := strconv.Itoa(hexPad)
-
 	var statTable string
 	columnPadding := 2
 	// Add column padding and table header
@@ -219,7 +226,7 @@ func printStackVars(stack stackInfo) error {
 	for i, stackVar := range stack.stackVars {
 		// Handle the special case where the first stack variable does not start at 0x0
 		if i == 0 && stackVar.addrStart != 0x0 {
-			statTable += stackVar.printTopRow(columnWidth, hexPadStr, index, stack.stackSize)
+			statTable += stackVar.printTopRow(columnWidth, hexPadStr, index, stack)
 			index++
 		}
 
@@ -231,7 +238,7 @@ func printStackVars(stack stackInfo) error {
 
 		// Add row for saved rbp
 		if i == len(stack.stackVars)-1 {
-			statTable += stackVar.printBottomRow(columnWidth, hexPadStr, index, stack.stackSize)
+			statTable += stackVar.printBottomRow(columnWidth, hexPadStr, index, stack)
 		}
 	}
 
@@ -240,14 +247,14 @@ func printStackVars(stack stackInfo) error {
 	return nil
 }
 
-func (o *stackVar) printTopRow(columnWidth []int, hexPadStr string, index int, stackSize uint64) string {
+func (o *stackVar) printTopRow(columnWidth []int, hexPadStr string, index int, stack stackInfo) string {
 	return fmt.Sprintf(
 		TableFormatString,
 		columnWidth[0], index,
-		columnWidth[1], fmt.Sprintf("rsp-0x%0"+hexPadStr+"x", stackSize),
-		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", 0x00),
-		columnWidth[3], strings.Repeat("-", int(stackSize/0x4)),
-		columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", o.addrStart-0x1),
+		columnWidth[1], fmt.Sprintf("rsp-0x%0x", stack.size),
+		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp-stack.size),
+		columnWidth[3], strings.Repeat("-", int(stack.size/0x4)),
+		columnWidth[4], fmt.Sprintf("0x%0x", o.addrStart-0x1),
 		columnWidth[5], "",
 		columnWidth[6], "",
 		columnWidth[7], "",
@@ -258,25 +265,25 @@ func (o *stackVar) print(columnWidth []int, hexPadStr string, index int) string 
 	return fmt.Sprintf(
 		TableFormatString,
 		columnWidth[0], index,
-		columnWidth[1], fmt.Sprintf("rsp-0x%0"+hexPadStr+"x", o.varOffset),
+		columnWidth[1], fmt.Sprintf("rsp-0x%0x", o.varOffset),
 		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", o.addrStart),
 		columnWidth[3], o.rangeString,
 		columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", o.addrEnd),
-		columnWidth[5], fmt.Sprintf("0x%0"+hexPadStr+"x", o.size),
+		columnWidth[5], fmt.Sprintf("0x%0x", o.size),
 		columnWidth[6], o.kind,
 		columnWidth[7], o.name,
 	)
 }
 
-func (o *stackVar) printBottomRow(columnWidth []int, hexPadStr string, index int, stackSize uint64) string {
+func (o *stackVar) printBottomRow(columnWidth []int, hexPadStr string, index int, stack stackInfo) string {
 	return fmt.Sprintf(
 		TableFormatString,
 		columnWidth[0], index,
-		columnWidth[1], "rsp-"+fmt.Sprintf("0x%0"+hexPadStr+"x", 0x08),
-		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stackSize-0x8),
-		columnWidth[3], strings.Repeat("-", int((stackSize-0x8)/0x4))+"xx",
-		columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", stackSize-0x1),
-		columnWidth[5], fmt.Sprintf("0x%0"+hexPadStr+"x", 0x08),
+		columnWidth[1], "rsp-"+fmt.Sprintf("0x%0x", 0x08),
+		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp-0x8),
+		columnWidth[3], strings.Repeat("-", int((stack.size-0x8)/0x4))+"xx",
+		columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp-0x1),
+		columnWidth[5], fmt.Sprintf("0x%0x", 0x08),
 		columnWidth[6], "int64_t",
 		columnWidth[7], "saved rbp",
 	)

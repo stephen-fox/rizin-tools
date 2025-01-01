@@ -12,14 +12,24 @@ import (
 )
 
 type stackVar struct {
-	kind        string
-	name        string
-	offset      uint64
+	varOffset   uint64
 	addrStart   uint64
 	rangeString string
 	addrEnd     uint64
 	size        uint64
+	kind        string
+	name        string
 }
+
+type stackInfo struct {
+	offset    uint64
+	stackSize uint64
+	stackVars []stackVar
+}
+
+var (
+	TableFormatString = "%-*d%-*s%-*s%-*s%-*s%-*s%-*s%-*s\n"
+)
 
 func main() {
 	log.SetFlags(0)
@@ -31,17 +41,12 @@ func main() {
 }
 
 func mainWithError() error {
-	stackVars, stackSize, err := afi2StackVars(bufio.NewScanner(os.Stdin))
+	stackInfo, err := afi2StackInfo(bufio.NewScanner(os.Stdin))
 	if err != nil {
 		return fmt.Errorf("failed to parse afi vars - %w", err)
 	}
 
-	stackVars, err = getVarRanges(stackVars, stackSize)
-	if err != nil {
-		return fmt.Errorf("failed to get var ranges - %w", err)
-	}
-
-	err = printStackVars(stackVars, stackSize)
+	err = printStackVars(stackInfo)
 	if err != nil {
 		return fmt.Errorf("failed to print stack vars - %w", err)
 	}
@@ -49,35 +54,72 @@ func mainWithError() error {
 	return nil
 }
 
-// function that can parse one line of text from afi output
-func afi2StackVars(scanner *bufio.Scanner) ([]stackVar, uint64, error) {
-	var varSlice []stackVar
-	var stackSize uint64
+func afi2StackInfo(scanner *bufio.Scanner) (stackInfo, error) {
+	var stack stackInfo
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		words := strings.Fields(line)
+		afiLine := scanner.Text()
+		words := strings.Fields(afiLine)
 
 		switch words[0] {
-		case "stackframe:":
-			value, err := strconv.ParseUint(words[1], 10, 64)
+		case "offset:":
+			offset, err := strconv.ParseUint(strings.Trim(words[1], "0x"), 16, 64)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to parse stackframe - %s", err)
+				return stackInfo{}, fmt.Errorf("failed to parse stackframe - %s", err)
 			}
 
-			stackSize = value
-		case "var":
-			stackVar, err := parseVarLine(line)
+			stack.offset = offset
+		case "stackframe:":
+			stackSize, err := strconv.ParseUint(words[1], 10, 64)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to parse var line - %s", err)
+				return stackInfo{}, fmt.Errorf("failed to parse stackframe - %s", err)
 			}
-			varSlice = append(varSlice, stackVar)
+
+			stack.stackSize = stackSize
+		case "var":
+			sVar, err := parseVarLine(afiLine)
+			if err != nil {
+				return stackInfo{}, fmt.Errorf("failed to parse var line in afi file - %s", err)
+			}
+
+			numStackVars := len(stack.stackVars)
+			sVar.addrStart = stack.stackSize - sVar.varOffset
+			if numStackVars > 0 {
+				lastSVar := &stack.stackVars[numStackVars-1]
+				lastSVar.addrEnd = sVar.addrStart - 0x1
+				lastSVar.size = lastSVar.addrEnd - lastSVar.addrStart + 0x1
+
+				leftSection := strings.Repeat("-", int(lastSVar.addrStart/0x4))
+				midSection := strings.Repeat("x", int(lastSVar.size/0x4))
+				sectionSize := int(stack.stackSize / 0x4)
+				rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection))
+
+				lastSVar.rangeString = leftSection + midSection + rightSection
+			}
+
+			stack.stackVars = append(stack.stackVars, sVar)
 		default:
 			//continue
 		}
 	}
 
-	return varSlice, stackSize, nil
+	if scanner.Err() != nil {
+		return stackInfo{}, fmt.Errorf("failed to read from input - %w", scanner.Err())
+	}
+
+	// for the last stack var
+	lastSVar := &stack.stackVars[len(stack.stackVars)-1]
+	lastSVar.addrEnd = stack.stackSize - 0x9
+	lastSVar.size = lastSVar.addrEnd - lastSVar.addrStart + 0x1
+
+	leftSection := strings.Repeat("-", int(lastSVar.addrStart/0x4))
+	midSection := strings.Repeat("x", int(lastSVar.size/0x4))
+	sectionSize := int(stack.stackSize / 0x4)
+	rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection))
+
+	lastSVar.rangeString = leftSection + midSection + rightSection
+
+	return stack, nil
 }
 
 func parseVarLine(line string) (stackVar, error) {
@@ -95,53 +137,15 @@ func parseVarLine(line string) (stackVar, error) {
 	}
 
 	newStackVar := stackVar{
-		kind:   strings.Join(typeNameSection[1:len(typeNameSection)-1], " "),
-		name:   typeNameSection[len(typeNameSection)-1],
-		offset: offset,
+		kind:      strings.Join(typeNameSection[1:len(typeNameSection)-1], " "),
+		name:      typeNameSection[len(typeNameSection)-1],
+		varOffset: offset,
 	}
 
 	return newStackVar, nil
 }
 
-func getVarRanges(stackVars []stackVar, stackSize uint64) ([]stackVar, error) {
-	// Calculate rangeSize in terms of 4-byte chunks
-	rangeSize := int(stackSize / 0x4)
-
-	for i := range stackVars {
-		// Calculate addrStart
-		stackVars[i].addrStart = stackSize - stackVars[i].offset
-
-		// Calculate addrEnd
-		if i < len(stackVars)-1 {
-			stackVars[i].addrEnd = stackSize - stackVars[i+1].offset - 0x1
-		} else {
-			stackVars[i].addrEnd = stackSize - 0x8 - 0x1
-		}
-
-		// Calculate size
-		stackVars[i].size = stackVars[i].addrEnd - stackVars[i].addrStart + 0x1
-
-		// Build rangeString
-		startBlocks := int(stackVars[i].addrStart / 0x4)
-		sizeBlocks := int(stackVars[i].size / 0x4)
-		if startBlocks+sizeBlocks > rangeSize {
-			return nil, fmt.Errorf("rangeString exceeds rangeSize for variable at index %d", i)
-		}
-
-		stackVars[i].rangeString = strings.Repeat("-", startBlocks) +
-			strings.Repeat("x", sizeBlocks)
-
-		// Pad remaining range
-		padding := rangeSize - len(stackVars[i].rangeString)
-		if padding > 0 {
-			stackVars[i].rangeString += strings.Repeat("-", padding)
-		}
-	}
-
-	return stackVars, nil
-}
-
-func printStackVars(stackVars []stackVar, stackSize uint64) error {
+func printStackVars(stack stackInfo) error {
 	var hexPad int
 	//                      0       1         2        3        4      5       6       7
 	tableHeader := []string{"var#", "offset", "start", "range", "end", "size", "type", "name"}
@@ -150,19 +154,19 @@ func printStackVars(stackVars []stackVar, stackSize uint64) error {
 		columnWidth[i] = len(tableHeader[i])
 	}
 
-	// Change column width based on table data size
-	for _, stackVar := range stackVars {
-		hexLen := len(fmt.Sprintf("%x", stackVar.offset))
+	// change column width based on table data size
+	for _, stackVar := range stack.stackVars {
+		hexLen := len(fmt.Sprintf("%x", stackVar.varOffset))
 		if hexPad < hexLen {
 			hexPad = hexLen
 		}
 
-		indexLen := utf8.RuneCountInString(strconv.Itoa(len(stackVars)))
+		indexLen := utf8.RuneCountInString(strconv.Itoa(len(stack.stackVars)))
 		if columnWidth[0] < indexLen {
 			columnWidth[0] = indexLen
 		}
 
-		offsetLen := len(fmt.Sprintf("rsp-0x%x", stackVar.offset))
+		offsetLen := len(fmt.Sprintf("rsp-0x%x", stackVar.varOffset))
 		if columnWidth[1] < offsetLen {
 			columnWidth[1] = offsetLen
 		}
@@ -212,10 +216,10 @@ func printStackVars(stackVars []stackVar, stackSize uint64) error {
 	statTable += "\n"
 
 	index := 0
-	for i, stackVar := range stackVars {
+	for i, stackVar := range stack.stackVars {
 		// Handle the special case where the first stack variable does not start at 0x0
 		if i == 0 && stackVar.addrStart != 0x0 {
-			statTable += stackVar.printTopRow(columnWidth, hexPadStr, index, stackSize)
+			statTable += stackVar.printTopRow(columnWidth, hexPadStr, index, stack.stackSize)
 			index++
 		}
 
@@ -226,8 +230,8 @@ func printStackVars(stackVars []stackVar, stackSize uint64) error {
 		}
 
 		// Add row for saved rbp
-		if i == len(stackVars)-1 {
-			statTable += stackVar.printBottomRow(columnWidth, hexPadStr, index, stackSize)
+		if i == len(stack.stackVars)-1 {
+			statTable += stackVar.printBottomRow(columnWidth, hexPadStr, index, stack.stackSize)
 		}
 	}
 
@@ -238,7 +242,7 @@ func printStackVars(stackVars []stackVar, stackSize uint64) error {
 
 func (o *stackVar) printTopRow(columnWidth []int, hexPadStr string, index int, stackSize uint64) string {
 	return fmt.Sprintf(
-		"%-*d%-*s%-*s%-*s%-*s%-*s%-*s%-*s\n",
+		TableFormatString,
 		columnWidth[0], index,
 		columnWidth[1], fmt.Sprintf("rsp-0x%0"+hexPadStr+"x", stackSize),
 		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", 0x00),
@@ -252,9 +256,9 @@ func (o *stackVar) printTopRow(columnWidth []int, hexPadStr string, index int, s
 
 func (o *stackVar) print(columnWidth []int, hexPadStr string, index int) string {
 	return fmt.Sprintf(
-		"%-*d%-*s%-*s%-*s%-*s%-*s%-*s%-*s\n",
+		TableFormatString,
 		columnWidth[0], index,
-		columnWidth[1], fmt.Sprintf("rsp-0x%0"+hexPadStr+"x", o.offset),
+		columnWidth[1], fmt.Sprintf("rsp-0x%0"+hexPadStr+"x", o.varOffset),
 		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", o.addrStart),
 		columnWidth[3], o.rangeString,
 		columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", o.addrEnd),
@@ -266,7 +270,7 @@ func (o *stackVar) print(columnWidth []int, hexPadStr string, index int) string 
 
 func (o *stackVar) printBottomRow(columnWidth []int, hexPadStr string, index int, stackSize uint64) string {
 	return fmt.Sprintf(
-		"%-*d%-*s%-*s%-*s%-*s%-*s%-*s%-*s\n",
+		TableFormatString,
 		columnWidth[0], index,
 		columnWidth[1], "rsp-"+fmt.Sprintf("0x%0"+hexPadStr+"x", 0x08),
 		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stackSize-0x8),

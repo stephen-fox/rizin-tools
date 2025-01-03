@@ -1,0 +1,34 @@
+:> afi
+offset: 0x000011be
+name: sym.get_flag
+size: 241
+is-pure: false
+realsz: 241
+stackframe: 88
+call-convention: amd64
+cyclomatic-cost: 84
+cyclomatic-complexity: 7
+loops: 0
+bits: 64
+type: sym
+num-bbs: 11
+edges: 14
+end-bbs: 2
+call-refs: 0x00001070 C 0x00001070 C 0x00001040 C 0x00001060 C 0x00001020 C 0x00001299 J 0x00001299 J 0x00001050 C
+data-refs: 0x00003ff0 0x00000018 0x00000064 0x00002019 0x00000063 0x00003ff0 0x00003fd0 0x0000201c
+code-xrefs: 0x00001260 J 0x00001290 J
+noreturn: false
+in-degree: 2
+out-degree: 6
+data-xrefs:
+locals: 7
+args: 2
+arg const char *arg1 @ rdi
+arg uint64_t arg2 @ rsi
+var uint64_t dbg_copy_M  { } @ stack - 0x54
+var const char *input_copy_M @ stack - 0x50
+var int64_t var_48h @ stack - 0x48
+var char *s @ stack - 0x40
+var const char *format @ stack - 0x38
+var int64_t function_to_call @ stack - 0x20
+var int64_t canary @ stack - 0x10

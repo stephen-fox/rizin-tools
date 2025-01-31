@@ -103,9 +103,7 @@ func afi2StackInfo(scanner *bufio.Scanner, rsp uint64) (stackInfo, error) {
 
 				leftSection := strings.Repeat("-", int((stack.size-(stack.rsp-lastSVar.addrStart))/0x4))
 				midSection := strings.Repeat("x", int(lastSVar.size/0x4))
-				sectionSize := int(stack.size / 0x4)
-				rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection))
-
+				rightSection := strings.Repeat("-", int(stack.size/0x4)-len(leftSection+midSection)+2)
 				lastSVar.rangeString = leftSection + midSection + rightSection
 			}
 
@@ -127,7 +125,7 @@ func afi2StackInfo(scanner *bufio.Scanner, rsp uint64) (stackInfo, error) {
 	leftSection := strings.Repeat("-", int((stack.size-(stack.rsp-lastSVar.addrStart))/0x4))
 	midSection := strings.Repeat("x", int(lastSVar.size/0x4))
 	sectionSize := int(stack.size / 0x4)
-	rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection))
+	rightSection := strings.Repeat("-", sectionSize-len(leftSection+midSection)+2)
 
 	lastSVar.rangeString = leftSection + midSection + rightSection
 
@@ -238,7 +236,13 @@ func printStackVars(stack stackInfo) error {
 
 		// Add row for saved rbp
 		if i == len(stack.stackVars)-1 {
-			statTable += stackVar.printBottomRow(columnWidth, hexPadStr, index, stack)
+			// to show the location of rbp considering stack alignment
+			if (stack.rsp-0x8)%0x8 != 0 {
+				statTable += stackVar.printBottomRow(columnWidth, hexPadStr, index, stack)
+			} else {
+				statTable += stackVar.printBottomEmptyRow(true, columnWidth, hexPadStr, index, stack)
+				statTable += stackVar.printBottomEmptyRow(false, columnWidth, hexPadStr, index, stack)
+			}
 		}
 	}
 
@@ -253,7 +257,7 @@ func (o *stackVar) printTopRow(columnWidth []int, hexPadStr string, index int, s
 		columnWidth[0], index,
 		columnWidth[1], fmt.Sprintf("rsp-0x%0x", stack.size),
 		columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp-stack.size),
-		columnWidth[3], strings.Repeat("-", int(stack.size/0x4)),
+		columnWidth[3], strings.Repeat("-", int(stack.size/0x4)+2),
 		columnWidth[4], fmt.Sprintf("0x%0x", o.addrStart-0x1),
 		columnWidth[5], "",
 		columnWidth[6], "",
@@ -273,6 +277,39 @@ func (o *stackVar) print(columnWidth []int, hexPadStr string, index int) string 
 		columnWidth[6], o.kind,
 		columnWidth[7], o.name,
 	)
+}
+
+// for alignment spacing before the rbp on the stack
+func (o *stackVar) printBottomEmptyRow(isPadding bool, columnWidth []int, hexPadStr string, index int, stack stackInfo) string {
+	var printString string
+
+	if isPadding {
+		printString = fmt.Sprintf(
+			TableFormatString,
+			columnWidth[0], index,
+			columnWidth[1], "rsp-"+fmt.Sprintf("0x%0x", 0x08),
+			columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp-0x8),
+			columnWidth[3], strings.Repeat("-", int((stack.size-0x8)/0x4))+"xx--",
+			columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp-0x1),
+			columnWidth[5], fmt.Sprintf("0x%0x", 0x08),
+			columnWidth[6], "int64_t",
+			columnWidth[7], "padding",
+		)
+	} else {
+		printString = fmt.Sprintf(
+			TableFormatString,
+			columnWidth[0], index,
+			columnWidth[1], "rsp",
+			columnWidth[2], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp),
+			columnWidth[3], strings.Repeat("-", int((stack.size)/0x4))+"xx",
+			columnWidth[4], fmt.Sprintf("0x%0"+hexPadStr+"x", stack.rsp+0x7),
+			columnWidth[5], fmt.Sprintf("0x%0x", 0x08),
+			columnWidth[6], "int64_t",
+			columnWidth[7], "saved rbp",
+		)
+	}
+
+	return printString
 }
 
 func (o *stackVar) printBottomRow(columnWidth []int, hexPadStr string, index int, stack stackInfo) string {
